@@ -731,14 +731,14 @@ static void * __init pe_find_section(const void * const image_base,
     const UINTN name_len = strlen(section_name);
     UINTN offset;
 
-    if (base == NULL)
+    if ( base == NULL )
         return NULL;
 
-    if (memcmp(dos->Magic, "MZ", 2) != 0)
+    if ( memcmp(dos->Magic, "MZ", 2) != 0 )
         return NULL;
 
     pe = (const void *) &base[dos->ExeHeader];
-    if (memcmp(pe->Magic, "PE\0\0", 4) != 0)
+    if ( memcmp(pe->Magic, "PE\0\0", 4) != 0 )
         return NULL;
 
     /* PE32+ Subsystem type */
@@ -747,7 +747,7 @@ static void * __init pe_find_section(const void * const image_base,
     &&  pe->FileHeader.Machine != PE_HEADER_MACHINE_I386)
         return NULL;
 
-    if (pe->FileHeader.NumberOfSections > 96)
+    if ( pe->FileHeader.NumberOfSections > 96 )
         return NULL;
 
     offset = dos->ExeHeader + sizeof(*pe) + pe->FileHeader.SizeOfOptionalHeader;
@@ -755,9 +755,9 @@ static void * __init pe_find_section(const void * const image_base,
     for (UINTN i = 0; i < pe->FileHeader.NumberOfSections; i++)
     {
         const struct PeSectionHeader *const sect = (const struct PeSectionHeader *)&base[offset];
-        if (memcmp(sect->Name, section_name, name_len) == 0)
+        if ( memcmp(sect->Name, section_name, name_len) == 0 )
         {
-            if (size_out)
+            if ( size_out )
                 *size_out = sect->VirtualSize;
             return (void*)(sect->VirtualAddress + (uintptr_t) image_base);
         }
@@ -768,8 +768,8 @@ static void * __init pe_find_section(const void * const image_base,
     return NULL;
 }
 
-static bool __init read_section(const void * const image_base, char * const name,
-        struct file *file, char *options)
+static bool __init read_section(const void * const image_base,
+        char * const name, struct file *file, char *options)
 {
     union string name_string = { .s = name + 1 };
     if ( !image_base )
@@ -792,6 +792,7 @@ static bool __init read_section(const void * const image_base, char * const name
     DisplayUint(file->addr + file->size, 2 * sizeof(file->addr));
     PrintStr(newline);
     efi_arch_handle_module(file, name_string.w, options);
+    efi_bs->FreePool(name_string.w);
 
     return true;
 }
@@ -1099,34 +1100,20 @@ static void __init setup_efi_pci(void)
     efi_bs->FreePool(handles);
 }
 
-
-static bool __init efivar_get_raw(const CHAR16 *name, uint8_t * buf, UINTN *size)
-{
-    static const EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
-    EFI_STATUS err;
-    if (!size)
-        return false;
-
-    err = efi_rs->GetVariable((CHAR16*) name, (EFI_GUID *)&global_guid, NULL, size, buf);
-    if (EFI_ERROR(err))
-        return false;
-
-    return true;
-}
-
 static bool __init efi_secure_boot(void)
 {
+    static const EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
     uint8_t buf[8];
     UINTN size = sizeof(buf);
-    if (!efivar_get_raw(L"SecureBoot", buf, &size))
-	return false;
 
-    if (size != 1)
+    if ( efi_rs->GetVariable(L"SecureBoot", (EFI_GUID *)&global_guid, NULL, &size, buf) != EFI_SUCCESS )
+        return false;
+
+    if ( size != 1 )
         return false;
 
     return buf[0] != 0;
 }
-
 
 static void __init efi_variables(void)
 {
@@ -1333,7 +1320,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
         PrintErrMesg(L"No Loaded Image Protocol", status);
 
     efi_arch_load_addr_check(loaded_image);
-    if (loaded_image)
+    if ( loaded_image )
         image_base = loaded_image->ImageBase;
 
     secure = efi_secure_boot();
@@ -1417,14 +1404,14 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
         if ( read_section(image_base, ".config", &cfg, NULL) )
         {
-	    if ( secure )
-		    PrintStr(L"Secure Boot enabled: ");
+            if ( secure )
+                PrintStr(L"Secure Boot enabled: ");
             PrintStr(L"Using unified config file\r\n");
         }
-	else if ( secure )
-	{
+        else if ( secure )
+        {
             blexit(L"Secure Boot enabled, but configuration not included.");
-	}
+        }
         else if ( !cfg_file_name )
         {
             /* Read and parse the config file. */
@@ -1445,7 +1432,6 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
         }
         else if ( !read_file(dir_handle, cfg_file_name, &cfg, NULL) )
             blexit(L"Configuration file not found.");
-
         pre_parse(&cfg);
 
         if ( section.w )
@@ -1483,7 +1469,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
         if ( !read_section(image_base, ".kernel", &kernel, option_str) )
         {
-	    if ( secure )
+            if ( secure )
                 blexit(L"Secure Boot enabled, but no kernel included");
             read_file(dir_handle, s2w(&name), &kernel, option_str);
             efi_bs->FreePool(name.w);
@@ -1496,7 +1482,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
         if ( !read_section(image_base, ".ramdisk", &ramdisk, NULL) )
         {
-	    if ( secure )
+            if ( secure )
                 blexit(L"Secure Boot enabled, but no initrd included");
             name.s = get_value(&cfg, section.s, "ramdisk");
             if ( name.s )
@@ -1506,16 +1492,21 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
             }
         }
 
+#ifdef CONFIG_XSM
         if ( !read_section(image_base, ".xsm", &xsm, NULL) )
         {
+#ifndef CONFIG_XSM_FLASK_POLICY
+            if ( secure )
+                blexit(L"Secure Boot enabled, but no FLASK policy included");
+#endif
             name.s = get_value(&cfg, section.s, "xsm");
             if ( name.s )
             {
-                if (!xsm.ptr)
-                    read_file(dir_handle, s2w(&name), &xsm, NULL);
+                read_file(dir_handle, s2w(&name), &xsm, NULL);
                 efi_bs->FreePool(name.w);
             }
         }
+#endif
 
         /*
          * EFI_LOAD_OPTION does not supply an image name as first component:
