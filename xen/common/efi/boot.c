@@ -1099,6 +1099,35 @@ static void __init setup_efi_pci(void)
     efi_bs->FreePool(handles);
 }
 
+
+static bool __init efivar_get_raw(const CHAR16 *name, uint8_t * buf, UINTN *size)
+{
+    static const EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
+    EFI_STATUS err;
+    if (!size)
+        return false;
+
+    err = efi_rs->GetVariable((CHAR16*) name, (EFI_GUID *)&global_guid, NULL, size, buf);
+    if (EFI_ERROR(err))
+        return false;
+
+    return true;
+}
+
+static bool __init efi_secure_boot(void)
+{
+    uint8_t buf[8];
+    UINTN size = sizeof(buf);
+    if (!efivar_get_raw(L"SecureBoot", buf, &size))
+	return false;
+
+    if (size != 1)
+        return false;
+
+    return buf[0] != 0;
+}
+
+
 static void __init efi_variables(void)
 {
     EFI_STATUS status;
@@ -1285,6 +1314,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     bool base_video = false;
     char *option_str;
     bool use_cfg_file;
+    bool secure = false;
 
     __set_bit(EFI_BOOT, &efi_flags);
     __set_bit(EFI_LOADER, &efi_flags);
@@ -1305,6 +1335,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     efi_arch_load_addr_check(loaded_image);
     if (loaded_image)
         image_base = loaded_image->ImageBase;
+
+    secure = efi_secure_boot();
 
     if ( use_cfg_file )
     {
@@ -1385,8 +1417,14 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
         if ( read_section(image_base, ".config", &cfg, NULL) )
         {
+	    if ( secure )
+		    PrintStr(L"Secure Boot enabled: ");
             PrintStr(L"Using unified config file\r\n");
         }
+	else if ( secure )
+	{
+            blexit(L"Secure Boot enabled, but configuration not included.");
+	}
         else if ( !cfg_file_name )
         {
             /* Read and parse the config file. */
@@ -1445,6 +1483,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
         if ( !read_section(image_base, ".kernel", &kernel, option_str) )
         {
+	    if ( secure )
+                blexit(L"Secure Boot enabled, but no kernel included");
             read_file(dir_handle, s2w(&name), &kernel, option_str);
             efi_bs->FreePool(name.w);
 
@@ -1456,6 +1496,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
         if ( !read_section(image_base, ".ramdisk", &ramdisk, NULL) )
         {
+	    if ( secure )
+                blexit(L"Secure Boot enabled, but no initrd included");
             name.s = get_value(&cfg, section.s, "ramdisk");
             if ( name.s )
             {
