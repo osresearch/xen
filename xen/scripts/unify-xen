@@ -33,26 +33,34 @@ RAMDISK="$4"
 XSM="$5"
 UCODE="$6"
 
+if [ ! -r "$XEN" ]; then
+	die "$XEN: Unable to find Xen executable"
+fi
+
+BASE_ADDR="$(objdump -h "$XEN" | awk '/ \.text / { print $4 }')"
+PREFIX_ADDR="0x$(echo "$BASE_ADDR" | cut -c1-9)"
+warn "$XEN: Base address $BASE_ADDR"
+
 objcopy \
 	${CONFIG:+\
 		--add-section .config="$CONFIG" \
-		--change-section-vma  .config=0xffff82d041000000 \
+		--change-section-vma .config=${PREFIX_ADDR}1000000 \
 	} \
 	${UCODE:+\
 		--add-section .ucode="$UCODE" \
-		--change-section-vma  .ucode=0xffff82d041010000 \
+		--change-section-vma  .ucode=${PREFIX_ADDR}1010000 \
 	} \
 	${XSM:+\
 		--add-section .xsm="$XSM" \
-		--change-section-vma  .xsm=0xffff82d041080000 \
+		--change-section-vma  .xsm=${PREFIX_ADDR}1080000 \
 	} \
 	${KERNEL:+\
 		--add-section .kernel="$KERNEL" \
-		--change-section-vma  .kernel=0xffff82d041100000 \
+		--change-section-vma  .kernel=${PREFIX_ADDR}1100000 \
 	} \
 	${RAMDISK:+\
 		--add-section .ramdisk="$RAMDISK" \
-		--change-section-vma .ramdisk=0xffff82d042000000 \
+		--change-section-vma .ramdisk=${PREFIX_ADDR}2000000 \
 	} \
 	"$XEN" \
 	"$TMP/xen.efi" \
