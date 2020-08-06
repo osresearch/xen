@@ -1,29 +1,31 @@
 #!/bin/bash
-# Merge a Linux kernel, initrd and commandline into xen.efi to produce a single signed
-# EFI executable.
+# Build a "unified Xen" image.
+# Usage
+# unify xen.efi xen.cfg bzimage initrd [xsm [ucode]]
 #
-# turn off "expressions don't expand in single quotes"
-# and "can't follow non-constant sources"
+# Merge a Xen configuration, Linux kernel, initrd, and optional XSM or ucode
+# into xen.efi to produce a single signed EFI executable.
+#
+# For shellcheck
+# - turn off "expressions don't expand in single quotes"
+# - and "can't follow non-constant sources"
 # shellcheck disable=SC2016 disable=SC1090
 set -e -o pipefail
 export LC_ALL=C
 
 die() { echo "$@" >&2 ; exit 1 ; }
 warn() { echo "$@" >&2 ; }
-debug() { [ "$VERBOSE" == 1 ] && echo "$@" >&2 ; }
+debug() { [ "$V" == 1 ] && echo "$@" >&2 ; }
 
 cleanup() {
 	rm -rf "$TMP"
 }
 
 TMP=$(mktemp -d)
-TMP_MOUNT=n
 trap cleanup EXIT
 
 ########################################
 
-# Usage
-# unify xen.efi xen.cfg bzimage initrd [xsm [ucode]]
 XEN="$1"
 CONFIG="$2"
 KERNEL="$3"
