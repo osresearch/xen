@@ -23,24 +23,35 @@ trap cleanup EXIT
 ########################################
 
 # Usage
-# unify xen.efi xen.cfg bzimage initrd
-# Xen goes up to a pad at 00400000
-
+# unify xen.efi xen.cfg bzimage initrd [xsm [ucode]]
 XEN="$1"
 CONFIG="$2"
 KERNEL="$3"
 RAMDISK="$4"
-#	--change-section-vma  .config=0x0500000 \
-#	--change-section-vma  .kernel=0x0510000 \
-#	--change-section-vma .ramdisk=0x3000000 \
+XSM="$5"
+UCODE="$6"
 
 objcopy \
-	--add-section .kernel="$KERNEL" \
-	--add-section .ramdisk="$RAMDISK" \
-	--add-section .config="$CONFIG" \
-	--change-section-vma  .config=0xffff82d041000000 \
-	--change-section-vma  .kernel=0xffff82d041010000 \
-	--change-section-vma .ramdisk=0xffff82d042000000 \
+	${CONFIG:+\
+		--add-section .config="$CONFIG" \
+		--change-section-vma  .config=0xffff82d041000000 \
+	} \
+	${UCODE:+\
+		--add-section .ucode="$UCODE" \
+		--change-section-vma  .ucode=0xffff82d041010000 \
+	} \
+	${XSM:+\
+		--add-section .xsm="$XSM" \
+		--change-section-vma  .xsm=0xffff82d041080000 \
+	} \
+	${KERNEL:+\
+		--add-section .kernel="$KERNEL" \
+		--change-section-vma  .kernel=0xffff82d041100000 \
+	} \
+	${RAMDISK:+\
+		--add-section .ramdisk="$RAMDISK" \
+		--change-section-vma .ramdisk=0xffff82d042000000 \
+	} \
 	"$XEN" \
 	"$TMP/xen.efi" \
 || die "$TMP/xen.efi: unable to create"
@@ -63,6 +74,6 @@ for try in 1 2 3 ; do
 		die "xen.signed.efi: failed after $try tries"
 	fi
 
-	warn "$OUTDIR/linux.efi: signature failed! Try $try."
+	warn "signature failed! Try $try."
 done
 

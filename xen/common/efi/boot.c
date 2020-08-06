@@ -122,6 +122,8 @@ static CHAR16 *s2w(union string *str);
 static char *w2s(const union string *str);
 static bool read_file(EFI_FILE_HANDLE dir_handle, CHAR16 *name,
                       struct file *file, char *options);
+static bool read_section(const void * const image_base,
+        char * const name, struct file *file, char *options);
 static size_t wstrlen(const CHAR16 * s);
 static int set_color(u32 mask, int bpp, u8 *pos, u8 *sz);
 static bool match_guid(const EFI_GUID *guid1, const EFI_GUID *guid2);
@@ -691,6 +693,7 @@ static bool __init read_section(const void * const image_base,
     PrintStr(L"-");
     DisplayUint(file->addr + file->size, 2 * sizeof(file->addr));
     PrintStr(newline);
+
     efi_arch_handle_module(file, name_string.w, options);
     efi_bs->FreePool(name_string.w);
 
@@ -1308,10 +1311,6 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
                 PrintStr(L"Secure Boot enabled: ");
             PrintStr(L"Using unified config file\r\n");
         }
-        else if ( secure )
-        {
-            blexit(L"Secure Boot enabled, but configuration not included.");
-        }
         else if ( !cfg_file_name )
         {
             /* Read and parse the config file. */
@@ -1369,8 +1368,6 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
         if ( !read_section(image_base, ".kernel", &kernel, option_str) )
         {
-            if ( secure )
-                blexit(L"Secure Boot enabled, but no kernel included");
             read_file(dir_handle, s2w(&name), &kernel, option_str);
             efi_bs->FreePool(name.w);
 
@@ -1382,8 +1379,6 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
         if ( !read_section(image_base, ".ramdisk", &ramdisk, NULL) )
         {
-            if ( secure )
-                blexit(L"Secure Boot enabled, but no initrd included");
             name.s = get_value(&cfg, section.s, "ramdisk");
             if ( name.s )
             {
@@ -1392,13 +1387,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
             }
         }
 
-#ifdef CONFIG_XSM
         if ( !read_section(image_base, ".xsm", &xsm, NULL) )
         {
-#ifndef CONFIG_XSM_FLASK_POLICY
-            if ( secure )
-                blexit(L"Secure Boot enabled, but no FLASK policy included");
-#endif
             name.s = get_value(&cfg, section.s, "xsm");
             if ( name.s )
             {
@@ -1406,7 +1396,6 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
                 efi_bs->FreePool(name.w);
             }
         }
-#endif
 
         /*
          * EFI_LOAD_OPTION does not supply an image name as first component:
@@ -1441,7 +1430,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
             }
         }
 
-        efi_arch_cfg_file_late(dir_handle, section.s);
+        efi_arch_cfg_file_late(image_base, dir_handle, section.s);
 
         efi_bs->FreePages(cfg.addr, PFN_UP(cfg.size));
         cfg.addr = 0;
