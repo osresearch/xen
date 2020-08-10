@@ -67,13 +67,12 @@ objcopy \
 || die "$TMP/xen.efi: unable to create"
 
 KEY_ENGINE=""
-KEY="/etc/safeboot/signing.key"
-CERT="/etc/safeboot/cert.pem"
+KEY="signing.key"
+CERT="cert.pem"
 
 for try in 1 2 3 ; do
 	warn "$TMP/xen.efi: Signing (ignore warnings about gaps)"
-	sbsign.safeboot \
-		$KEY_ENGINE \
+	sbsign \
 		--key "$KEY" \
 		--cert "$CERT" \
 		--output "xen.signed.efi" \
