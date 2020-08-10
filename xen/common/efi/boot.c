@@ -592,6 +592,21 @@ static char * __init split_string(char *s)
     return NULL;
 }
 
+static void __init display_file_info(CHAR16 * name, struct file * file, char * options)
+{
+    if ( file == &cfg )
+        return;
+
+    PrintStr(name);
+    PrintStr(L": ");
+    DisplayUint(file->addr, 2 * sizeof(file->addr));
+    PrintStr(L"-");
+    DisplayUint(file->addr + file->size, 2 * sizeof(file->addr));
+    PrintStr(newline);
+
+    efi_arch_handle_module(file, name, options);
+}
+
 static bool __init read_file(EFI_FILE_HANDLE dir_handle, CHAR16 *name,
                              struct file *file, char *options)
 {
@@ -636,16 +651,7 @@ static bool __init read_file(EFI_FILE_HANDLE dir_handle, CHAR16 *name,
     else
     {
         file->size = size;
-        if ( file != &cfg )
-        {
-            PrintStr(name);
-            PrintStr(L": ");
-            DisplayUint(file->addr, 2 * sizeof(file->addr));
-            PrintStr(L"-");
-            DisplayUint(file->addr + size, 2 * sizeof(file->addr));
-            PrintStr(newline);
-            efi_arch_handle_module(file, name, options);
-        }
+        display_file_info(name, file, options);
 
         ret = FileHandle->Read(FileHandle, &file->size, file->ptr);
         if ( !EFI_ERROR(ret) && file->size != size )
@@ -669,13 +675,10 @@ static bool __init read_file(EFI_FILE_HANDLE dir_handle, CHAR16 *name,
     return true;
 }
 
-
-static bool __init read_section(const void * const image_base,
-        char * const name, struct file *file, char *options)
+static bool __init read_section(const void * image_base, char * const name,
+                                struct file *file, char *options)
 {
     union string name_string = { .s = name + 1 };
-    if ( !image_base )
-        return false;
 
     file->ptr = pe_find_section(image_base, name, &file->size);
     if ( !file->ptr )
@@ -683,18 +686,8 @@ static bool __init read_section(const void * const image_base,
 
     file->need_to_free = false;
 
-    if ( file == &cfg )
-        return true;
-
     s2w(&name_string);
-    PrintStr(name_string.w);
-    PrintStr(L": ");
-    DisplayUint(file->addr, 2 * sizeof(file->addr));
-    PrintStr(L"-");
-    DisplayUint(file->addr + file->size, 2 * sizeof(file->addr));
-    PrintStr(newline);
-
-    efi_arch_handle_module(file, name_string.w, options);
+    display_file_info(name_string.w, file, options);
     efi_bs->FreePool(name_string.w);
 
     return true;
@@ -1015,7 +1008,7 @@ static bool __init efi_secure_boot(void)
     if ( size != 1 )
         return false;
 
-    return buf[0] != 0;
+    return buf[0] == '\x01';
 }
 
 static void __init efi_variables(void)
@@ -1195,8 +1188,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     EFI_LOADED_IMAGE *loaded_image;
     void * image_base = NULL;
     EFI_STATUS status;
-    unsigned int i, argc;
-    CHAR16 **argv, *file_name, *cfg_file_name = NULL, *options = NULL;
+    unsigned int i, argc = 0;
+    CHAR16 **argv = NULL, *file_name, *cfg_file_name = NULL, *options = NULL;
     UINTN gop_mode = ~0;
     EFI_SHIM_LOCK_PROTOCOL *shim_lock;
     EFI_GRAPHICS_OUTPUT_PROTOCOL *gop = NULL;
@@ -1223,12 +1216,11 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
         PrintErrMesg(L"No Loaded Image Protocol", status);
 
     efi_arch_load_addr_check(loaded_image);
-    if ( loaded_image )
-        image_base = loaded_image->ImageBase;
-
+    image_base = loaded_image->ImageBase;
     secure = efi_secure_boot();
 
-    if ( use_cfg_file )
+    // If UEFI Secure Boot is enabled, do not parse the command line
+    if ( use_cfg_file && !secure )
     {
         UINTN offset = 0;
 
