@@ -110,7 +110,7 @@ const void * __init pe_find_section(const CHAR8 * image, const UINTN image_size,
     if (pe->FileHeader.Machine != PE_HEADER_MACHINE_X64)
         return NULL;
 #else
-    // unknown architecture
+    /* unknown architecture */
     return NULL;
 #endif
 

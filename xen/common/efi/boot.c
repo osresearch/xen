@@ -1222,7 +1222,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     efi_arch_load_addr_check(loaded_image);
     secure = efi_secure_boot();
 
-    // If UEFI Secure Boot is enabled, do not parse the command line
+    /* If UEFI Secure Boot is enabled, do not parse the command line */
     if ( use_cfg_file && !secure )
     {
         UINTN offset = 0;
