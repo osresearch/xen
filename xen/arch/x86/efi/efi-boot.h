@@ -276,10 +276,10 @@ static void __init efi_arch_cfg_file_early(EFI_FILE_HANDLE dir_handle, char *sec
 {
 }
 
-static void __init efi_arch_cfg_file_late(const void * image_base, EFI_FILE_HANDLE dir_handle, char *section)
+static void __init efi_arch_cfg_file_late(EFI_LOADED_IMAGE * image, EFI_FILE_HANDLE dir_handle, char *section)
 {
     union string name;
-    if ( read_section(image_base, ".ucode", &ucode, NULL) )
+    if ( read_section(image, ".ucode", &ucode, NULL) )
         return;
 
     name.s = get_value(&cfg, section, "ucode");

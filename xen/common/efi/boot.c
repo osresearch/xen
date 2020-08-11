@@ -122,8 +122,8 @@ static CHAR16 *s2w(union string *str);
 static char *w2s(const union string *str);
 static bool read_file(EFI_FILE_HANDLE dir_handle, CHAR16 *name,
                       struct file *file, char *options);
-static bool read_section(const void * const image_base,
-        char * const name, struct file *file, char *options);
+static bool read_section(EFI_LOADED_IMAGE * image,
+        char * name, struct file *file, char *options);
 static size_t wstrlen(const CHAR16 * s);
 static int set_color(u32 mask, int bpp, u8 *pos, u8 *sz);
 static bool match_guid(const EFI_GUID *guid1, const EFI_GUID *guid2);
@@ -675,12 +675,12 @@ static bool __init read_file(EFI_FILE_HANDLE dir_handle, CHAR16 *name,
     return true;
 }
 
-static bool __init read_section(const void * image_base, char * const name,
-                                struct file *file, char *options)
+static bool __init read_section(EFI_LOADED_IMAGE * image,
+                                char * const name, struct file *file, char *options)
 {
     union string name_string = { .s = name + 1 };
 
-    file->ptr = pe_find_section(image_base, name, &file->size);
+    file->ptr = (void*) pe_find_section(image->ImageBase, image->ImageSize, name, &file->size);
     if ( !file->ptr )
         return false;
 
@@ -998,7 +998,7 @@ static void __init setup_efi_pci(void)
 
 static bool __init efi_secure_boot(void)
 {
-    static const EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
+    static const __initconst EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
     uint8_t buf[8];
     UINTN size = sizeof(buf);
 
@@ -1186,7 +1186,6 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     static EFI_GUID __initdata loaded_image_guid = LOADED_IMAGE_PROTOCOL;
     static EFI_GUID __initdata shim_lock_guid = SHIM_LOCK_PROTOCOL_GUID;
     EFI_LOADED_IMAGE *loaded_image;
-    void * image_base = NULL;
     EFI_STATUS status;
     unsigned int i, argc = 0;
     CHAR16 **argv = NULL, *file_name, *cfg_file_name = NULL, *options = NULL;
@@ -1216,7 +1215,6 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
         PrintErrMesg(L"No Loaded Image Protocol", status);
 
     efi_arch_load_addr_check(loaded_image);
-    image_base = loaded_image->ImageBase;
     secure = efi_secure_boot();
 
     // If UEFI Secure Boot is enabled, do not parse the command line
@@ -1297,7 +1295,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
         /* Get the file system interface. */
         dir_handle = get_parent_handle(loaded_image, &file_name);
 
-        if ( read_section(image_base, ".config", &cfg, NULL) )
+        if ( read_section(loaded_image, ".config", &cfg, NULL) )
         {
             if ( secure )
                 PrintStr(L"Secure Boot enabled: ");
@@ -1358,7 +1356,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
         option_str = split_string(name.s);
 
-        if ( !read_section(image_base, ".kernel", &kernel, option_str) )
+        if ( !read_section(loaded_image, ".kernel", &kernel, option_str) )
         {
             read_file(dir_handle, s2w(&name), &kernel, option_str);
             efi_bs->FreePool(name.w);
@@ -1369,7 +1367,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
                 PrintErrMesg(L"Dom0 kernel image could not be verified", status);
         }
 
-        if ( !read_section(image_base, ".ramdisk", &ramdisk, NULL) )
+        if ( !read_section(loaded_image, ".ramdisk", &ramdisk, NULL) )
         {
             name.s = get_value(&cfg, section.s, "ramdisk");
             if ( name.s )
@@ -1379,7 +1377,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
             }
         }
 
-        if ( !read_section(image_base, ".xsm", &xsm, NULL) )
+        if ( !read_section(loaded_image, ".xsm", &xsm, NULL) )
         {
             name.s = get_value(&cfg, section.s, "xsm");
             if ( name.s )
@@ -1422,7 +1420,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
             }
         }
 
-        efi_arch_cfg_file_late(image_base, dir_handle, section.s);
+        efi_arch_cfg_file_late(loaded_image, dir_handle, section.s);
 
         efi_bs->FreePages(cfg.addr, PFN_UP(cfg.size));
         cfg.addr = 0;
