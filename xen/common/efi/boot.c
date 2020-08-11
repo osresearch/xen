@@ -996,19 +996,24 @@ static void __init setup_efi_pci(void)
     efi_bs->FreePool(handles);
 }
 
+/*
+ * Logic should remain sync'ed with linux/arch/x86/xen/efi.c
+ * Secure Boot is enabled iff 'SecureBoot' is set and the system is
+ * not in Setup Mode.
+ */
 static bool __init efi_secure_boot(void)
 {
     static const __initconst EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
-    uint8_t buf[8];
-    UINTN size = sizeof(buf);
+    uint8_t secboot, setupmode;
+    UINTN secboot_size = sizeof(secboot);
+    UINTN setupmode_size = sizeof(setupmode);
 
-    if ( efi_rs->GetVariable(L"SecureBoot", (EFI_GUID *)&global_guid, NULL, &size, buf) != EFI_SUCCESS )
+    if ( efi_rs->GetVariable(L"SecureBoot", (EFI_GUID *)&global_guid, NULL, &secboot_size, &secboot) != EFI_SUCCESS )
+        return false;
+    if ( efi_rs->GetVariable(L"SetupMode", (EFI_GUID *)&global_guid, NULL, &setupmode_size, &setupmode) != EFI_SUCCESS )
         return false;
 
-    if ( size != 1 )
-        return false;
-
-    return buf[0] == '\x01';
+    return secboot == 1 && setupmode == 0;
 }
 
 static void __init efi_variables(void)
