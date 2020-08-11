@@ -75,22 +75,30 @@ struct PeSectionHeader {
     UINT32  Characteristics;
 } __attribute__((packed));
 
-void * __init pe_find_section(const void * const image_base,
-        const char * section_name, UINTN * size_out)
+const void * __init pe_find_section(const CHAR8 * image, const UINTN image_size,
+                              const char * section_name, UINTN * size_out)
 {
-    const CHAR8 * const base = image_base;
-    const struct DosFileHeader * dos = (const void*) base;
+    const struct DosFileHeader * dos = (const void*) image;
     const struct PeHeader * pe;
+    const struct PeSectionHeader * sect;
     const UINTN name_len = strlen(section_name);
-    UINTN offset;
+    UINTN offset = 0;
 
-    if ( base == NULL )
+    if ( name_len > sizeof(sect->Name) )
         return NULL;
 
+    if ( image_size < sizeof(*dos) )
+        return NULL;
     if ( memcmp(dos->Magic, "MZ", 2) != 0 )
         return NULL;
 
-    pe = (const void *) &base[dos->ExeHeader];
+    offset = dos->ExeHeader;
+    pe = (const void *) &image[offset];
+
+    offset += sizeof(*pe);
+    if ( image_size < offset)
+        return NULL;
+
     if ( memcmp(pe->Magic, "PE\0\0", 4) != 0 )
         return NULL;
 
@@ -106,22 +114,25 @@ void * __init pe_find_section(const void * const image_base,
     return NULL;
 #endif
 
-    if ( pe->FileHeader.NumberOfSections > 96 )
-        return NULL;
+    offset += pe->FileHeader.SizeOfOptionalHeader;
 
-    offset = dos->ExeHeader + sizeof(*pe) + pe->FileHeader.SizeOfOptionalHeader;
-
-    for (UINTN i = 0; i < pe->FileHeader.NumberOfSections; i++)
+    for (UINTN i = 0 ; i < pe->FileHeader.NumberOfSections ; i++)
     {
-        const struct PeSectionHeader *const sect = (const struct PeSectionHeader *)&base[offset];
-        if ( memcmp(sect->Name, section_name, name_len) == 0 )
+        sect = (const void *) &image[offset];
+        if ( image_size < offset + sizeof(*sect) )
+            return NULL;
+
+        if ( memcmp(sect->Name, section_name, name_len) != 0
+        ||   image_size < sect->VirtualSize + sect->VirtualAddress )
         {
-            if ( size_out )
-                *size_out = sect->VirtualSize;
-            return (void*)(sect->VirtualAddress + (uintptr_t) image_base);
+            offset += sizeof(*sect);
+            continue;
         }
 
-        offset += sizeof(*sect);
+        if ( size_out )
+            *size_out = sect->VirtualSize;
+
+        return &image[sect->VirtualAddress];
     }
 
     return NULL;

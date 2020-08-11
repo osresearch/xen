@@ -42,5 +42,5 @@ extern UINTN efi_apple_properties_len;
 
 const CHAR16 *wmemchr(const CHAR16 *s, CHAR16 c, UINTN n);
 
-void * pe_find_section(const void * const image_base,
+const void * pe_find_section(const UINT8 * image_base, const size_t image_size,
         const char * section_name, UINTN * size_out);
