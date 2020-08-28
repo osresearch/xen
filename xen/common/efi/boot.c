@@ -678,6 +678,7 @@ static bool __init read_file(EFI_FILE_HANDLE dir_handle, CHAR16 *name,
 static bool __init read_section(EFI_LOADED_IMAGE * image,
                                 char * const name, struct file *file, char *options)
 {
+    /* skip the leading "." in the section name */
     union string name_string = { .s = name + 1 };
 
     file->ptr = (void*) pe_find_section(image->ImageBase, image->ImageSize, name, &file->size);
@@ -1281,6 +1282,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
     PrintStr(L"Xen " __stringify(XEN_VERSION) "." __stringify(XEN_SUBVERSION)
              XEN_EXTRAVERSION " (c/s " XEN_CHANGESET ") EFI loader\r\n");
+    if ( secure )
+	PrintStr(L"UEFI Secure Boot enabled\r\n");
 
     efi_arch_relocate_image(0);
 
@@ -1302,8 +1305,6 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
         if ( read_section(loaded_image, ".config", &cfg, NULL) )
         {
-            if ( secure )
-                PrintStr(L"Secure Boot enabled: ");
             PrintStr(L"Using unified config file\r\n");
         }
         else if ( !cfg_file_name )
