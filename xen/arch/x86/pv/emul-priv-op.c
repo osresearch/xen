@@ -837,6 +837,23 @@ static inline bool is_cpufreq_controller(const struct domain *d)
             is_hardware_domain(d));
 }
 
+static uint64_t guest_efer(const struct domain *d)
+{
+    uint64_t val;
+
+    /* Hide unknown bits, and unconditionally hide SVME from guests. */
+    val = read_efer() & EFER_KNOWN_MASK & ~EFER_SVME;
+    /*
+     * Hide the 64-bit features from 32-bit guests.  SCE has
+     * vendor-dependent behaviour.
+     */
+    if ( is_pv_32bit_domain(d) )
+        val &= ~(EFER_LME | EFER_LMA |
+                 (boot_cpu_data.x86_vendor == X86_VENDOR_INTEL
+                  ? EFER_SCE : 0));
+    return val;
+}
+
 static int read_msr(unsigned int reg, uint64_t *val,
                     struct x86_emulate_ctxt *ctxt)
 {
@@ -855,6 +872,13 @@ static int read_msr(unsigned int reg, uint64_t *val,
 
     switch ( reg )
     {
+    case MSR_APIC_BASE:
+        /* Linux PV guests will attempt to read APIC_BASE. */
+        *val = APIC_BASE_ENABLE | APIC_DEFAULT_PHYS_BASE;
+        if ( !curr->vcpu_id )
+            *val |= APIC_BASE_BSP;
+        return X86EMUL_OKAY;
+
     case MSR_FS_BASE:
         if ( is_pv_32bit_domain(currd) )
             break;
@@ -880,16 +904,11 @@ static int read_msr(unsigned int reg, uint64_t *val,
         return X86EMUL_OKAY;
 
     case MSR_EFER:
-        /* Hide unknown bits, and unconditionally hide SVME from guests. */
-        *val = read_efer() & EFER_KNOWN_MASK & ~EFER_SVME;
-        /*
-         * Hide the 64-bit features from 32-bit guests.  SCE has
-         * vendor-dependent behaviour.
-         */
-        if ( is_pv_32bit_domain(currd) )
-            *val &= ~(EFER_LME | EFER_LMA |
-                      (boot_cpu_data.x86_vendor == X86_VENDOR_INTEL
-                       ? EFER_SCE : 0));
+        *val = guest_efer(currd);
+        return X86EMUL_OKAY;
+
+    case MSR_IA32_CR_PAT:
+        *val = XEN_MSR_PAT;
         return X86EMUL_OKAY;
 
     case MSR_K7_FID_VID_CTL:
@@ -1003,6 +1022,15 @@ static int write_msr(unsigned int reg, uint64_t val,
             break;
         wrgsshadow(val);
         curr->arch.pv.gs_base_user = val;
+        return X86EMUL_OKAY;
+
+    case MSR_EFER:
+        /*
+         * Reject writes which change the value, but Linux depends on being
+         * able to write back the current value.
+         */
+        if ( val != guest_efer(currd) )
+            break;
         return X86EMUL_OKAY;
 
     case MSR_K7_FID_VID_STATUS:

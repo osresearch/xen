@@ -244,18 +244,18 @@ QEMU_TRADITIONAL_URL ?= git://xenbits.xen.org/qemu-xen-traditional.git
 SEABIOS_UPSTREAM_URL ?= git://xenbits.xen.org/seabios.git
 MINIOS_UPSTREAM_URL ?= git://xenbits.xen.org/mini-os.git
 endif
-OVMF_UPSTREAM_REVISION ?= 20d2e5a125e34fc8501026613a71549b2a1a3e54
+OVMF_UPSTREAM_REVISION ?= a3741780fe3535e19e02efa869a7cac481891129
 QEMU_UPSTREAM_REVISION ?= master
 MINIOS_UPSTREAM_REVISION ?= master
 
-SEABIOS_UPSTREAM_REVISION ?= rel-1.13.0
+SEABIOS_UPSTREAM_REVISION ?= rel-1.14.0
 
 ETHERBOOT_NICS ?= rtl8139 8086100e
 
 
-QEMU_TRADITIONAL_REVISION ?= 3c659044118e34603161457db9934a34f816d78b
-# Fri Mar 13 12:35:26 2020 +0000
-# xen: cleanup IOREQ server on exit
+QEMU_TRADITIONAL_REVISION ?= 3d273dd05e51e5a1ffba3d98c7437ee84e8f8764
+# Wed Jul 15 10:01:40 2020 +0100
+# qemu-trad: remove Xen path dependencies
 
 # Specify which qemu-dm to use. This may be `ioemu' to use the old
 # Mercurial in-tree version, or a local directory, or a git URL.

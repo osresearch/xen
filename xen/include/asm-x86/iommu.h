@@ -45,16 +45,27 @@ typedef uint64_t daddr_t;
 
 struct arch_iommu
 {
-    u64 pgd_maddr;                 /* io page directory machine address */
-    spinlock_t mapping_lock;            /* io page table lock */
-    int agaw;     /* adjusted guest address width, 0 is level 2 30-bit */
-    u64 iommu_bitmap;              /* bitmap of iommu(s) that the domain uses */
-    struct list_head mapped_rmrrs;
+    spinlock_t mapping_lock; /* io page table lock */
+    struct {
+        struct page_list_head list;
+        spinlock_t lock;
+    } pgtables;
 
-    /* amd iommu support */
-    int paging_mode;
-    struct page_info *root_table;
-    struct guest_iommu *g_iommu;
+    union {
+        /* Intel VT-d */
+        struct {
+            uint64_t pgd_maddr; /* io page directory machine address */
+            unsigned int agaw; /* adjusted guest address width, 0 is level 2 30-bit */
+            uint64_t iommu_bitmap; /* bitmap of iommu(s) that the domain uses */
+            struct list_head mapped_rmrrs;
+        } vtd;
+        /* AMD IOMMU */
+        struct {
+            unsigned int paging_mode;
+            struct page_info *root_table;
+            struct guest_iommu *g_iommu;
+        } amd;
+    };
 };
 
 extern struct iommu_ops iommu_ops;
@@ -123,6 +134,9 @@ int pi_update_irte(const struct pi_desc *pi_desc, const struct pirq *pirq,
     if ( ops->sync_cache )                              \
         iommu_vcall(ops, sync_cache, addr, size);       \
 })
+
+int __must_check iommu_free_pgtables(struct domain *d);
+struct page_info *__must_check iommu_alloc_pgtable(struct domain *d);
 
 #endif /* !__ARCH_X86_IOMMU_H__ */
 /*

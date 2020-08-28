@@ -180,8 +180,8 @@ static int iommu_pde_from_dfn(struct domain *d, unsigned long dfn,
     struct page_info *table;
     const struct domain_iommu *hd = dom_iommu(d);
 
-    table = hd->arch.root_table;
-    level = hd->arch.paging_mode;
+    table = hd->arch.amd.root_table;
+    level = hd->arch.amd.paging_mode;
 
     BUG_ON( table == NULL || level < 1 || level > 6 );
 
@@ -217,7 +217,7 @@ static int iommu_pde_from_dfn(struct domain *d, unsigned long dfn,
             mfn = next_table_mfn;
 
             /* allocate lower level page table */
-            table = alloc_amd_iommu_pgtable();
+            table = iommu_alloc_pgtable(d);
             if ( table == NULL )
             {
                 AMD_IOMMU_DEBUG("Cannot allocate I/O page table\n");
@@ -248,7 +248,7 @@ static int iommu_pde_from_dfn(struct domain *d, unsigned long dfn,
 
             if ( next_table_mfn == 0 )
             {
-                table = alloc_amd_iommu_pgtable();
+                table = iommu_alloc_pgtable(d);
                 if ( table == NULL )
                 {
                     AMD_IOMMU_DEBUG("Cannot allocate I/O page table\n");
@@ -286,7 +286,7 @@ int amd_iommu_map_page(struct domain *d, dfn_t dfn, mfn_t mfn,
 
     spin_lock(&hd->arch.mapping_lock);
 
-    rc = amd_iommu_alloc_root(hd);
+    rc = amd_iommu_alloc_root(d);
     if ( rc )
     {
         spin_unlock(&hd->arch.mapping_lock);
@@ -325,7 +325,7 @@ int amd_iommu_unmap_page(struct domain *d, dfn_t dfn,
 
     spin_lock(&hd->arch.mapping_lock);
 
-    if ( !hd->arch.root_table )
+    if ( !hd->arch.amd.root_table )
     {
         spin_unlock(&hd->arch.mapping_lock);
         return 0;
@@ -450,7 +450,7 @@ int __init amd_iommu_quarantine_init(struct domain *d)
     unsigned int level = amd_iommu_get_paging_mode(end_gfn);
     struct amd_iommu_pte *table;
 
-    if ( hd->arch.root_table )
+    if ( hd->arch.amd.root_table )
     {
         ASSERT_UNREACHABLE();
         return 0;
@@ -458,11 +458,11 @@ int __init amd_iommu_quarantine_init(struct domain *d)
 
     spin_lock(&hd->arch.mapping_lock);
 
-    hd->arch.root_table = alloc_amd_iommu_pgtable();
-    if ( !hd->arch.root_table )
+    hd->arch.amd.root_table = iommu_alloc_pgtable(d);
+    if ( !hd->arch.amd.root_table )
         goto out;
 
-    table = __map_domain_page(hd->arch.root_table);
+    table = __map_domain_page(hd->arch.amd.root_table);
     while ( level )
     {
         struct page_info *pg;
@@ -473,7 +473,7 @@ int __init amd_iommu_quarantine_init(struct domain *d)
          * page table pages, and the resulting allocations are always
          * zeroed.
          */
-        pg = alloc_amd_iommu_pgtable();
+        pg = iommu_alloc_pgtable(d);
         if ( !pg )
             break;
 

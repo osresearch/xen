@@ -42,8 +42,12 @@
 #define _PGT_validated    PG_shift(6)
 #define PGT_validated     PG_mask(1, 6)
  /* PAE only: is this an L2 page directory containing Xen-private mappings? */
+#ifdef CONFIG_PV32
 #define _PGT_pae_xen_l2   PG_shift(7)
 #define PGT_pae_xen_l2    PG_mask(1, 7)
+#else
+#define PGT_pae_xen_l2    0
+#endif
 /* Has this page been *partially* validated for use as its current type? */
 #define _PGT_partial      PG_shift(8)
 #define PGT_partial       PG_mask(1, 8)
@@ -494,25 +498,13 @@ extern paddr_t mem_hotplug;
 #define SHARED_M2P_ENTRY         (~0UL - 1UL)
 #define SHARED_M2P(_e)           ((_e) == SHARED_M2P_ENTRY)
 
-#define compat_machine_to_phys_mapping ((unsigned int *)RDWR_COMPAT_MPT_VIRT_START)
-#define _set_gpfn_from_mfn(mfn, pfn) ({                        \
-    struct domain *d = page_get_owner(mfn_to_page(_mfn(mfn))); \
-    unsigned long entry = (d && (d == dom_cow)) ?              \
-        SHARED_M2P_ENTRY : (pfn);                              \
-    ((void)((mfn) >= (RDWR_COMPAT_MPT_VIRT_END - RDWR_COMPAT_MPT_VIRT_START) / 4 || \
-            (compat_machine_to_phys_mapping[(mfn)] = (unsigned int)(entry))), \
-     machine_to_phys_mapping[(mfn)] = (entry));                \
-    })
-
 /*
  * Disable some users of set_gpfn_from_mfn() (e.g., free_heap_pages()) until
  * the machine_to_phys_mapping is actually set up.
  */
 extern bool machine_to_phys_mapping_valid;
-#define set_gpfn_from_mfn(mfn, pfn) do {        \
-    if ( machine_to_phys_mapping_valid )        \
-        _set_gpfn_from_mfn(mfn, pfn);           \
-} while (0)
+
+void set_gpfn_from_mfn(unsigned long mfn, unsigned long pfn);
 
 extern struct rangeset *mmio_ro_ranges;
 
